@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The Render Layers Gem provides a rendering feature called `render layers`: a programmer-facing abstraction for controlling render order without exposing game code directly to low-level render pass complexity.
+The Render Layers Gem provides a rendering feature called `Render Layers`: a programmer-facing abstraction for controlling render order without exposing game code directly to low-level render pass complexity.
 
 The goal is to let developers break a scene into ordered rendering steps so that certain content can appear in front of or behind other content regardless of normal 3D occlusion. This makes it possible to create effects commonly seen in games and animation, such as first-person weapon rendering, impact-frame focus effects, foreground character reveals, stylized backdrops, and other intentional violations of normal 3D visibility.
 
@@ -20,7 +20,7 @@ Primary goals:
 * Reject invalid ordering changes instead of silently choosing a fallback order.
 * Allow render elements to render in zero, one, or many compatible layers when explicitly configured.
 * Provide simple default behavior where each element is explicitly assignable to at most one layer unless the developer opts into more.
-* Provide basis fallback so existing unassigned render elements can continue rendering through a default layer.
+* Provide `Basis` fallback so existing unassigned render elements can continue rendering through a default layer.
 * Use isolated depth between scene render layers so later layers appear visually in front of earlier layers.
 * Keep UI rendering outside of this system for the MVP.
 
@@ -69,9 +69,11 @@ MVP render layer sources:
 * `Image Source`: renders compatible image render elements.
 * `Video Source`: renders compatible video render elements.
 
-A render layer can contain multiple compatible render elements. For example, an image layer can render multiple image elements, and a scene layer can render multiple entity elements.
+Examples may use the shortened source labels `Scene`, `Shader`, `Image`, and `Video` when showing layer definitions.
 
-The MVP may begin with simple fullscreen behavior for shader, image, and video sources, but the abstraction should not prevent future screen-space layout controls such as position, scale, anchoring, cropping, or masking.
+A render layer can render multiple compatible render elements. For example, an image layer can render multiple image elements, and a scene layer can render multiple entity elements.
+
+The MVP may begin with simple full-screen behavior for shader, image, and video sources, but the abstraction should not prevent future screen-space layout controls such as position, scale, anchoring, cropping, or masking.
 
 ### Render Layer
 
@@ -89,15 +91,15 @@ A render layer has:
 
 A `Render Layer Sequence Definition` is a shareable asset that describes a set of render layers and their relative ordering constraints.
 
-The definition is resolved into a flat contiguous array of layers for rendering called a render layer sequence. This resolved array is derived state, and is not the authoritative editing model (the definition is the editing model).
+The definition is resolved into a flat contiguous array of layers for rendering called a render layer sequence. This resolved array is derived state and is not the authoritative editing model; the definition and runtime api remains the editing model.
 
-A sequence with zero layers renders nothing. A sequence with multiple layers must resolve to exactly one valid total order.
+A sequence with zero layers renders nothing. A single-layer sequence is valid without ordering constraints. A sequence with multiple layers (> 0 order constraints) must resolve to exactly one valid total order.
 
 ### Default Render Layer Sequence Definition
 
 The `Default Render Layer Sequence Definition` is the project-level definition used by cameras that do not specify an override.
 
-The Gem should provide a neutral sequence definition as a starting point so that enabling the Gem does not change the game's appearance. This neutral sequence definition should only contain one scene layer with `Basis` behavior so normal unassigned scene content continues to render.
+The Gem should provide a neutral sequence definition as a starting point so that enabling the Gem does not change the game's appearance. This neutral sequence definition should only contain one layer with `Scene Source` and `Basis` behavior so normal unassigned scene content continues to render.
 
 Projects are expected to duplicate or create their own sequence definition assets instead of editing Gem-provided content directly.
 
@@ -109,12 +111,12 @@ Multiple cameras may reference the same render layer sequence definition. Camera
 
 ### Layer Behavior
 
-A `Layer Behavior` modifies how a normal render layer participates in element assignment or rendering behavior.
+A `Layer Behavior` modifies how a render layer participates in assignment or rendering.
 
 MVP layer behaviors:
 
 * `None`: default behavior. The layer only renders elements explicitly assigned to it.
-* `Basis`: the layer may render compatible unassigned elements through basis fallback. This fallback assignment is not an explicit assignment but instead an implicit assignment.
+* `Basis`: the layer may render compatible unassigned elements through `Basis` fallback. This fallback assignment is implicit, not explicit.
 
 The MVP treats behavior as a single setting on a layer. Future versions may add more behaviors if needed.
 
@@ -126,7 +128,7 @@ Effects may only be compatible with certain render layer sources.
 
 Initial effect to support:
 
-* `Field Of View`: overrides the FOV for a scene render layer. This is important for first-person rendering.
+* `Field of View`: overrides the FOV for a scene render layer. This is important for first-person rendering.
 
 Future versions may allow games to define custom render layer effects.
 
@@ -137,7 +139,7 @@ A `Layer Assignment` is the relationship that causes a render element to be rend
 There are two kinds of layer assignment:
 
 * `Explicit Layer Assignment`: a stored assignment made by the developer, editor, asset, or runtime API.
-* `Implicit Layer Assignment`: a computed assignment produced by system behavior (e.g. basis layer fallback).
+* `Implicit Layer Assignment`: a computed assignment produced by system behavior, such as `Basis` fallback.
 
 `Effective Layer Assignments` are the assignments used for rendering after combining explicit assignments and implicit assignments.
 
@@ -151,11 +153,11 @@ MVP policy:
 
 * `MaxExplicitAssignments(count)`
 
-Default added policy for every render element:
+Default policy for every render element:
 
 * `MaxExplicitAssignments(1)`
 
-This default means render elements can only be explicitly assigned to one compatible layer at a time. If a developer wants an element to have multiple explicit layer assignments, they must intentionally remove or replace the default policy. This default policy exists to allow the developer to approach the usage of this gem with simplicity without sacrificing advanced usages.
+This default means render elements can only be explicitly assigned to one compatible layer at a time. If a developer wants an element to have multiple explicit layer assignments, they must intentionally remove or replace the default policy. This default policy keeps common usage simple without sacrificing advanced use cases.
 
 ## Layer Assignment Model
 
@@ -169,17 +171,18 @@ Explicit layer assignment rules:
 * If a policy is violated, the assignment change is rejected.
 * Explicit assignment to a layer with `Basis` behavior is allowed because it is still a normal layer.
 
-Basis fallback rules:
+`Basis` fallback rules:
 
-* Basis fallback only applies to elements with zero explicit compatible layer assignments.
-* If an element has an explicit assignment to any compatible layer, basis fallback is not evaluated for that element.
-* If an element has an explicit assignment to the basis-behavior layer, it renders there explicitly and does not also render there through basis fallback.
-* If an element has zero explicit compatible layer assignments and basis fallback is enabled for that element, the system creates an implicit layer assignment to the compatible basis-behavior layer if one exists.
-* If an element has zero explicit compatible layer assignments and basis fallback is disabled for that element, no implicit basis assignment occurs.
-* If an element has zero explicit compatible layer assignments, basis fallback is enabled, and no compatible basis-behavior layer exists, the element simply doesn't render due to not having an assigned layer.
-* Basis fallback does not mutate explicit assignment state.
+* `Basis` fallback only applies to elements with zero explicit compatible layer assignments.
+* `Basis` fallback should be enabled by default for render elements so Gem integration remains visually neutral.
+* If an element has an explicit assignment to any compatible layer, `Basis` fallback is not evaluated for that element.
+* If an element has an explicit assignment to a layer with `Basis` behavior, it renders there explicitly and does not also render there through `Basis` fallback.
+* If an element has zero explicit compatible layer assignments and `Basis` fallback is enabled for that element, the system creates an implicit layer assignment to the compatible layer with `Basis` behavior if one exists.
+* If an element has zero explicit compatible layer assignments and `Basis` fallback is disabled for that element, no implicit `Basis` assignment occurs.
+* If an element has zero explicit compatible layer assignments, `Basis` fallback is enabled, and no compatible layer with `Basis` behavior exists, the element does not render because it has no assigned layer.
+* `Basis` fallback does not mutate explicit assignment state.
 
-Sequence validity rules for basis behavior:
+Sequence validity rules for `Basis` behavior:
 
 * A render layer sequence may contain at most one compatible `Basis` behavior layer per render layer source.
 * Multiple compatible layers with `Basis` behavior for the same source are invalid.
@@ -256,13 +259,13 @@ Convenience operation:
 
 * `ImmediatelyBetween(previousLayer, nextLayer)`
 
-`ImmediatelyBetween` is not a primitive ordering concept. It is a higher-level convenience that can be implemented by updating the underlying primitive constraints.
+`ImmediatelyBetween` is not a primitive ordering concept. It is a higher-level convenience that can be implemented by updating the underlying primitive constraints between two adjacent layers.
 
 ### Sequence Solver
 
-The `Sequence Solver` is the system responsible for validating a render layer sequence's order constraints and resolving them into the final render layer sequence (single flat layer order used for rendering). It evaluates candidate sequence changes before they are committed so the active sequence never enters an invalid or ambiguous ordering state.
+The `Sequence Solver` is the system responsible for validating a render layer sequence's order constraints and resolving them into the final render layer sequence: a single flat layer order used for rendering. It evaluates candidate sequence changes before they are committed so the active sequence never enters an invalid or ambiguous ordering state.
 
-For a committed render layer sequence with more than one layer, the constraints must resolve into exactly one contiguous chain containing every layer.
+For a committed render layer sequence with more than one layer, the constraints must resolve into exactly one contiguous chain containing every layer. A layer added to a multi-layer sequence must be connected as part of the same atomic change that introduces it.
 
 Validity requirements:
 
@@ -300,7 +303,7 @@ LayerB ImmediatelyBefore LayerA
 
 Invalid because this creates a cycle.
 
-### Candidate Changes And Committed State
+### Candidate Changes and Committed State
 
 The active committed sequence must always remain valid.
 
@@ -332,7 +335,7 @@ This makes render layer order the primary mechanism for cross-layer visibility. 
 
 Future versions may add configurable depth policies such as shared depth, depth-only layers, mask layers, or separate named depth domains. These are out of scope for the MVP.
 
-## Runtime And Design-Time Operations
+## Runtime and Design-Time Operations
 
 The following operations should be available through C++ at runtime. Design-time tooling or assets should use the same model and validation rules.
 
@@ -343,8 +346,8 @@ Render element operations:
 * Query explicit layer assignments.
 * Query implicit layer assignments.
 * Query effective layer assignments.
-* Enable or disable basis fallback for the element.
-* Add, remove assignment policies.
+* Enable or disable `Basis` fallback for the element.
+* Add or remove assignment policies.
 
 Render layer operations:
 
@@ -354,7 +357,7 @@ Render layer operations:
 * Set layer behavior.
 * Add render layer effect.
 * Remove render layer effect.
-* Set render layer effect value.
+* Configure render layer effect parameters.
 
 Render layer sequence operations:
 
@@ -372,7 +375,7 @@ Camera operations:
 * Set render layer sequence definition override.
 * Clear render layer sequence definition override.
 
-## Debugging And Validation Tooling
+## Debugging and Validation Tooling
 
 Because ordering is constraint-solved, the Gem should provide strong debugging support.
 
@@ -382,14 +385,14 @@ It should show:
 
 * The active resolved sequence order for a specified camera.
 * Each layer's source, behavior, effects, and constraints.
-* Whether each element is rendered by explicit assignment or implicit.
+* Whether each element is rendered by an explicit or implicit assignment.
 * Elements that do not render because they have no effective assignment.
 * Invalid candidate ordering errors.
 * Cycles.
 * Conflicting immediate constraints.
 * Disconnected chains.
 * Assignment policy violations.
-* Basis behavior conflicts.
+* `Basis` behavior conflicts.
 
 The debug view may display ambiguous or disconnected groups for explanation, but these groups are diagnostic only. They are not part of the committed render layer sequence data model.
 
@@ -411,9 +414,9 @@ SceneBasis
   Behavior: Basis
 ```
 
-This is the default render layer sequence definition that users will notice is being used once the gem is integrated.
+This is the default render layer sequence definition used after the Gem is integrated.
 
-All compatible unassigned scene entities render through implicit basis assignment. The game should look the same as it did before integrating the Gem.
+All compatible unassigned scene entities render through implicit `Basis` assignment. The game should look the same as it did before integrating the Gem.
 
 ### First-Person Render Layer Sequence
 
@@ -433,12 +436,12 @@ SceneBasis
 FirstPerson
   Source: Scene
   Behavior: None
-  Effect: Field Of View override
+  Effect: Field of View override
 ```
 
 Typical assignment behavior:
 
-* Normal world entities have no explicit layer assignment and render through `SceneBasis` by basis fallback.
+* Normal world entities have no explicit layer assignment and render through `SceneBasis` by `Basis` fallback.
 * First-person arms, weapons, or tools are explicitly assigned to `FirstPerson`.
 * Because scene layers use isolated depth, the first-person layer renders visually in front of the world and avoids clipping against world geometry.
 
@@ -460,7 +463,7 @@ SceneBasis
   Behavior: Basis
 
 Backdrop
-  Source: Scene
+  Source: Any source the user may want
   Behavior: None
   
 Interesting
@@ -468,16 +471,16 @@ Interesting
   Behavior: None
 
 Foreground
-  Source: Scene
+  Source: Any source the user may want
   Behavior: None
 ```
 
 Possible layer roles:
 
-* `SceneBasis`: normal scene content using basis fallback.
-* `Backdrop`: shader, image, video, or scene content used to stylize the moment.
+* `SceneBasis`: normal scene content using `Basis` fallback.
+* `Backdrop`: elements that should appear behind the interesting layer.
 * `Interesting`: entities the game wants to emphasize.
-* `Foreground`: optional elements that should appear above the interesting layer.
+* `Foreground`: optional elements that should appear in front of the interesting layer.
 
 This can support effects such as impact frames, character reveal moments, finishing blows, or cinematic focus effects.
 
@@ -490,14 +493,14 @@ Expected integration behavior:
 * The project has a default render layer sequence definition setting.
 * The Gem provides a neutral default render layer sequence definition.
 * Cameras use the project default unless they reference a sequence definition override.
-* Existing scene entities render through basis fallback.
+* Existing scene entities render through `Basis` fallback.
 * Existing UI rendering remains outside the render layer sequence and uses O3DE's current UI rendering path.
 
 ## Performance Considerations
 
-* We should prefer data-oriented design practices to mitigate cache misses where possible.
-* We should favor value-semantics over reference semantics where it benefits us. Less heap allocations, improves cache locality, addresses lifetime safety concerns.
-* Committed render layer sequences should be pre-resolved into flat runtime arrays so ordering constraints are not solved during rendering, unless we are required to solve at runtime due to change at runtime.
+* Prefer data-oriented design practices to mitigate cache misses where possible.
+* Favor value semantics over reference semantics where beneficial. This reduces heap allocations, improves cache locality, and addresses lifetime safety concerns.
+* Committed render layer sequences should be pre-resolved into flat runtime arrays so ordering constraints are not solved during rendering, except when validating or committing runtime changes.
 * Assignment policies, layer compatibility, and sequence validity should be checked when state changes, not in the render hot path.
 * Debug and validation diagnostics should be available, but should not add cost to normal rendering unless enabled.
 
@@ -519,7 +522,7 @@ This should be explicit. Shared depth should not be used as an automatic ambigui
 
 ### Batched Operations
 
-Future convenience APIs may allow for user-defined grouped operations, such as moving elements x, y, and z to certain layers. This creates a structured way to apply changes.
+Future convenience APIs may allow user-defined grouped operations, such as moving a set of elements to specific layers. This creates a structured way to apply related changes together.
 
 ### Scoped Runtime States
 
@@ -531,11 +534,9 @@ Example future workflow:
 ScopedAddExplicitLayerAssignment myScopedLayerAssignment; // Adds on construction, removes on destruction.
 ```
 
-It would also be beneficial to support batched operations.
+### Artist and Designer Tooling
 
-### Artist And Designer Tooling
-
-Future tools may create a similar experience to photoshop as an abstracted layer workflow for non-engineers.
+Future tools may create a similar experience to Photoshop as an abstracted layer workflow for non-engineers.
 
 ### UI Integration
 
@@ -568,4 +569,4 @@ Examples:
 * Layer-local post-processing.
 * Screen-space layout for image, video, and shader elements.
 
-Some of these features may potentially be implemented as render layer effects.
+Some of these features may be implemented as render layer effects.
