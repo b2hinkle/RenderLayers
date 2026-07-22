@@ -15,6 +15,7 @@ The MVP should focus on a small, safe, programmer-first system.
 Primary goals:
 
 * Provide low-level C++ control over render layers, render elements, and render layer sequences.
+* Provide reusable render layer definitions for common layer configuration, and have sequence definitions compose them into ordered render layers.
 * Preserve the game's existing visual output after integration until the developer intentionally makes desired changes through use of render element assignments.
 * Use pure layer-relative ordering. Developers do not directly edit absolute sequence indices.
 * Reject invalid ordering changes instead of silently choosing a fallback order.
@@ -41,7 +42,7 @@ These may be added later if the core system proves useful and stable.
 * Layer-relative ordering only: ordering intent is expressed relative to other layers.
 * Programmer first: expose a clear low-level C++ model before building higher-level editor or gameplay conveniences.
 * Simple by default: default usage should protect against unintentional multi-layer element rendering or missing fallback rendering.
-* Composition over inheritance: use concepts such as layer sources, layer behaviors, effects, and policies instead of creating many special layer subclasses.
+* Composition over inheritance: use concepts such as, layer sources, layer behaviors, effects, and policies instead of creating many special layer subclasses.
 
 ## Core Terminology
 
@@ -79,27 +80,45 @@ The MVP may begin with simple full-screen behavior for shader, image, and video 
 
 A `Render Layer` is a named rendering step in a render layer sequence.
 
+A render layer can be a sequence-local use of a render layer definition, an inline created layer within a sequence definition, or dynamically created through code.
+
 A render layer has:
 
-* A name.
+* A sequence-local name unique to the layer's instance.
+* A reference to a render layer definition if instanced from one.
 * A render layer source.
 * One layer behavior.
 * Zero or more render layer effects.
 * A set of effective element assignments evaluated for rendering.
 
+### Render Layer Definition
+
+A `Render Layer Definition` is a reusable asset or data object that describes the reusable properties of a render layer without defining where that layer appears in a sequence.
+
+A render layer definition has:
+
+* A name.
+* A render layer source.
+* One layer behavior.
+* Zero or more render layer effects and effect parameters.
+
+Render layer definitions do not contain ordering constraints or element assignments. Constraints and ordering must remain the responsibility of the render layer sequence. Assignments remain owned by render elements, or runtime APIs.
+
+Render layer sequence definitions reference render layer definitions and provide sequence-specific data such as ordering constraints. This makes common layer configurations reusable across multiple sequences.
+
 ### Render Layer Sequence Definition
 
-A `Render Layer Sequence Definition` is a shareable asset that describes a set of render layers and their relative ordering constraints.
+A `Render Layer Sequence Definition` is a shareable asset that describes a set of render layers and their relative ordering constraints. The render layers used for the sequence definition are configured via the addition or removal of render layer definition asset references.
 
-The definition is resolved into a flat contiguous array of layers for rendering called a render layer sequence. This resolved array is derived state and is not the authoritative editing model; the definition and runtime api remains the editing model.
+The definition is resolved into a flat contiguous array of instanced layers for rendering called a render layer sequence. This resolved array is derived state and is not the authoritative editing model; the sequence definition and runtime API remain the editing model.
 
-A sequence with zero layers renders nothing. A single-layer sequence is valid without ordering constraints. A sequence with multiple layers (> 0 order constraints) must resolve to exactly one valid total order.
+A sequence with zero layers renders nothing. A single-layer sequence is valid without ordering constraints. A sequence with multiple layers must include enough immediate ordering constraints to resolve to exactly one valid total order.
 
 ### Default Render Layer Sequence Definition
 
 The `Default Render Layer Sequence Definition` is the project-level definition used by cameras that do not specify an override.
 
-The Gem should provide a neutral sequence definition as a starting point so that enabling the Gem does not change the game's appearance. This neutral sequence definition should only contain one layer with `Scene Source` and `Basis` behavior so normal unassigned scene content continues to render.
+The Gem should provide a neutral sequence definition as a starting point so that enabling the Gem does not change the game's appearance. This neutral sequence definition should contain one render layer created from a neutral render layer definition with `Scene Source` and `Basis` behavior so normal unassigned scene content continues to render.
 
 Projects are expected to duplicate or create their own sequence definition assets instead of editing Gem-provided content directly.
 
@@ -248,7 +267,7 @@ These are quality-of-life safeguards and are not required for the MVP unless the
 
 Render layer sequence ordering is pure layer-relative ordering.
 
-Developers do not directly set absolute layer indices. Instead, they specify constraints between layers. The system resolves those constraints into one flat ordered array for rendering.
+Developers do not directly set absolute layer indices. Instead, they specify constraints between sequence-local render layers. The system resolves those constraints into one flat ordered array for rendering. Reusable render layer definitions do not carry ordering constraints.
 
 Primitive MVP constraints:
 
@@ -335,7 +354,7 @@ This makes render layer order the primary mechanism for cross-layer visibility. 
 
 Future versions may add configurable depth policies such as shared depth, depth-only layers, mask layers, or separate named depth domains. These are out of scope for the MVP.
 
-## Runtime and Design-Time Operations
+## Runtime and Design-Time Operations // TODO: Split into runtime and design-time operations.
 
 The following operations should be available through C++ at runtime. Design-time tooling or assets should use the same model and validation rules.
 
@@ -352,8 +371,8 @@ Render element operations:
 Render layer operations:
 
 * Create render layer.
-* Remove render layer.
 * Set render layer source at creation time.
+* Set name.
 * Set layer behavior.
 * Add render layer effect.
 * Remove render layer effect.
@@ -361,7 +380,7 @@ Render layer operations:
 
 Render layer sequence operations:
 
-* Add render layer.
+* Add render layer from layer definition or already instantiated layer.
 * Remove render layer.
 * Add order constraint.
 * Remove order constraint.
@@ -384,7 +403,7 @@ The debug tool should be available at design time and runtime.
 It should show:
 
 * The active resolved sequence order for a specified camera.
-* Each layer's source, behavior, effects, and constraints.
+* Each layer's definition, source, behavior, effects, and constraints.
 * Whether each element is rendered by an explicit or implicit assignment.
 * Elements that do not render because they have no effective assignment.
 * Invalid candidate ordering errors.
@@ -491,7 +510,7 @@ The Gem should integrate without changing the game's appearance until the develo
 Expected integration behavior:
 
 * The project has a default render layer sequence definition setting.
-* The Gem provides a neutral default render layer sequence definition.
+* The Gem provides a neutral default render layer definition and a neutral default render layer sequence definition that uses it.
 * Cameras use the project default unless they reference a sequence definition override.
 * Existing scene entities render through `Basis` fallback.
 * Existing UI rendering remains outside the render layer sequence and uses O3DE's current UI rendering path.
@@ -499,10 +518,17 @@ Expected integration behavior:
 ## Performance Considerations
 
 * Prefer data-oriented design practices to mitigate cache misses where possible.
+* Avoid data member bloat. Optimize class memory layouts, utilize structure of arrays rather than array of structures with contiguous memory iteration for prefetcher friendly code.
 * Favor value semantics over reference semantics where beneficial. This reduces heap allocations, improves cache locality, and addresses lifetime safety concerns.
-* Committed render layer sequences should be pre-resolved into flat runtime arrays so ordering constraints are not solved during rendering, except when validating or committing runtime changes.
+* Committed render layer sequences should be pre-resolved into flat runtime arrays so ordering constraints are not resolved during rendering, except when validating or committing runtime changes.
+* Keep unnecessary validation logic out of release builds.
 * Assignment policies, layer compatibility, and sequence validity should be checked when state changes, not in the render hot path.
 * Debug and validation diagnostics should be available, but should not add cost to normal rendering unless enabled.
+
+## Coding Styles
+
+* Negative space programming is encouraged. This keeps our implementation simple and in-check. It also serves as a good example of self documenting code.
+* Logging is encouraged where it benefits us. Warnings, errors, and normal status messages help us diagnose scenarios.
 
 ## Future Improvements
 
