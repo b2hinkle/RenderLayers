@@ -534,6 +534,16 @@ Expected integration behavior:
 
 The following ideas are intentionally outside the MVP but should not be blocked by the design.
 
+### Inline Layer Definitions
+
+Future versions may allow render layer sequence definitions to contain inline layer definitions instead of requiring references to layer definition assets.
+
+An inline layer definition would be owned by a single render layer sequence definition. It would use the same layer configuration model as an asset-backed render layer definition.
+
+The purpose is to avoid unnecessary asset proliferation for one-off layers (the neutral render layer sequence definition provided by the gem could benefit from this).
+
+Inline definitions should resolve exactly like asset-backed definitions. The runtime render layer sequence should not care whether a layer came from an external definition asset or from inline data.
+
 ### Injection Points
 
 Game developers may define named injection points that external systems or mods can use to request sequence changes without knowing the full project sequence.
