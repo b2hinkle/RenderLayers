@@ -21,7 +21,8 @@ Primary goals:
 * Reject invalid ordering changes instead of silently choosing a fallback order.
 * Allow render elements to render in zero, one, or many compatible layers when explicitly configured.
 * Provide simple default behavior where each element is explicitly assignable to at most one layer unless the developer opts into more.
-* Provide `Basis` fallback so existing unassigned render elements can continue rendering through a default layer.
+* Provide `Basis` fallback as a type of implicit assignment so existing unassigned render elements can continue rendering through a default layer.
+* Allow render elements to opt out of implicit assignments.
 * Use isolated depth between scene render layers so later layers appear visually in front of earlier layers.
 * Keep UI rendering outside of this system for the MVP.
 
@@ -135,7 +136,7 @@ A `Layer Behavior` modifies how a render layer participates in assignment or ren
 MVP layer behaviors:
 
 * `None`: default behavior. The layer only renders elements explicitly assigned to it.
-* `Basis`: the layer may render compatible unassigned elements through `Basis` fallback. This fallback assignment is implicit, not explicit.
+* `Basis`: the layer may render compatible unassigned elements through a type of implicit assignment called `Basis` fallback. This fallback assignment is not explicit.
 
 The MVP treats behavior as a single setting on a layer. Future versions may add more behaviors if needed.
 
@@ -161,6 +162,8 @@ There are two kinds of layer assignment:
 * `Implicit Layer Assignment`: a computed assignment produced by system behavior, such as `Basis` fallback.
 
 `Effective Layer Assignments` are the assignments used for rendering after combining explicit assignments and implicit assignments.
+
+Each render element has an `allow implicit assignments` setting. This setting is enabled by default so Gem integration remains visually neutral. When disabled, no implicit assignments may occur for that element. In the MVP, implicit assignments only occur through `Basis` fallback as a layer behavior.
 
 ### Element Assignment Policy
 
@@ -193,13 +196,13 @@ Explicit layer assignment rules:
 `Basis` fallback rules:
 
 * `Basis` fallback only applies to elements with zero explicit compatible layer assignments.
-* `Basis` fallback should be enabled by default for render elements so Gem integration remains visually neutral.
+* `Allow implicit assignments` should be enabled by default for render elements so Gem integration remains visually neutral.
 * If an element has an explicit assignment to any compatible layer, `Basis` fallback is not evaluated for that element.
 * If an element has an explicit assignment to a layer with `Basis` behavior, it renders there explicitly and does not also render there through `Basis` fallback.
-* If an element has zero explicit compatible layer assignments and `Basis` fallback is enabled for that element, the system creates an implicit layer assignment to the compatible layer with `Basis` behavior if one exists.
-* If an element has zero explicit compatible layer assignments and `Basis` fallback is disabled for that element, no implicit `Basis` assignment occurs.
-* If an element has zero explicit compatible layer assignments, `Basis` fallback is enabled, and no compatible layer with `Basis` behavior exists, the element does not render because it has no assigned layer.
-* `Basis` fallback does not mutate explicit assignment state.
+* If an element has zero explicit compatible layer assignments and implicit assignment is allowed for that element, the system creates an implicit layer assignment to the compatible layer with `Basis` behavior if one exists.
+* If an element has zero explicit compatible layer assignments and implicit assignment is not allowed for that element, no implicit `Basis` assignment occurs.
+* If an element has zero explicit compatible layer assignments, implicit assignment is allowed, and no compatible layer with `Basis` behavior exists, the element does not render because it has no assigned layer.
+* Any kind of implicit assignment (e.g. `Basis` fallback) does not mutate explicit assignment state.
 
 Sequence validity rules for `Basis` behavior:
 
@@ -223,12 +226,12 @@ FirstPersonLayer
 
 Unassigned entity:
   Explicit layer assignments: none
-  Basis fallback: enabled
+  Allow implicit assignments: true
   Effective layer assignment: implicit assignment to SceneBasisLayer
 
 First-person weapon:
   Explicit layer assignments: FirstPersonLayer
-  Basis fallback: enabled
+  Allow implicit assignments: true
   Effective layer assignment: only explicit assignment to FirstPersonLayer
 ```
 
@@ -365,7 +368,7 @@ Render element operations:
 * Query explicit layer assignments.
 * Query implicit layer assignments.
 * Query effective layer assignments.
-* Enable or disable `Basis` fallback for the element.
+* Allow or disallow implicit assignments for the element.
 * Add or remove assignment policies.
 
 Render layer operations:
