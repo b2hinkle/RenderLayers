@@ -16,7 +16,7 @@ Primary goals:
 
 * Provide low-level C++ control over render layers, render elements, and render layer sequences.
 * Provide reusable render layer definitions for common layer configuration, and have sequence definitions compose them into ordered render layers.
-* Preserve the game's existing visual output after integration until the developer intentionally makes desired changes through use of render element assignments.
+* Preserve the game's existing visual output after integration until the developer intentionally makes desired changes.
 * Use pure layer-relative ordering. Developers do not directly edit absolute sequence indices.
 * Reject invalid ordering changes instead of silently choosing a fallback order.
 * Allow render elements to render in zero, one, or many compatible layers when explicitly configured.
@@ -265,6 +265,8 @@ Future assignment policies may include:
 * `RequireExplicitAssignment`
 
 These are quality-of-life safeguards and are not required for the MVP unless they are trivial to add.
+
+
 
 ## Ordering Model
 
