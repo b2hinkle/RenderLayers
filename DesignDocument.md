@@ -60,6 +60,26 @@ MVP render element categories:
 
 UI render elements are excluded from the MVP. O3DE's existing UI rendering remains separate.
 
+Each render element has layer-assignment configuration used to validate assignment edits and resolve the element's effective layer assignments.
+
+Layer-assignment configuration:
+
+* Assignment policies
+* Explicit layer assignments
+* Whether implicit assignments are allowed
+
+Default layer-assignment configuration:
+
+* Assignment policies: `MaxExplicitAssignments(1)`
+* Explicit layer assignments: none
+* Allow implicit assignments: true
+
+These defaults preserve the game's rendering before Gem integration by allowing compatible unassigned elements to render through `Basis` fallback.
+
+Every render element starts from these defaults, and overrides are per element. Implementations may store the defaults once and only materialize per-element override data when an element differs from those defaults.
+
+Entity render elements should expose these overrides through a render element configuration component. This component should provide an integrated editor workflow while using the same lower-level assignment API available to non-entity render elements such as shader, image, and video elements.
+
 ### Render Layer Source
 
 A `Render Layer Source` defines what kind of content a layer renders and which render element categories are compatible with that layer.
@@ -265,8 +285,6 @@ Future assignment policies may include:
 * `RequireExplicitAssignment`
 
 These are quality-of-life safeguards and are not required for the MVP unless they are trivial to add.
-
-
 
 ## Ordering Model
 
